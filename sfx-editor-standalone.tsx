@@ -7,6 +7,7 @@
  * - Emotion tagging (select text → pick emotion)
  * - Color-coded emotion highlighting
  * - Hover to change emotions
+ * - Focus mode (spotlight on selected text)
  *
  * REQUIREMENTS:
  * - Next.js with App Router
@@ -20,6 +21,9 @@
  * 3. npm install lucide-react
  * 4. Copy this file to components/sfx-script-editor.tsx
  * 5. Import: import { SfxScriptEditor } from "@/components/sfx-script-editor"
+ *
+ * USAGE:
+ * <SfxScriptEditor />
  */
 
 "use client";
@@ -27,7 +31,17 @@
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Scissors, GripVertical, Volume2, Clock, Smile } from "lucide-react";
+import {
+  Copy,
+  Scissors,
+  GripVertical,
+  Volume2,
+  Clock,
+  Smile,
+  ChevronDown,
+  X,
+  Focus,
+} from "lucide-react";
 
 // ============================================
 // CONFIGURATION - Edit these to customize
@@ -104,24 +118,28 @@ function getEmotion(id: string) {
 }
 
 // ============================================
-// COMPONENTS
+// POPUP COMPONENTS
 // ============================================
 
-function EmotionSelector({
+/**
+ * SelectionPopup - Shows when user selects text
+ * Buttons: Copy, Cut, Emotion (dropdown), Focus
+ */
+function SelectionPopup({
   position,
-  onSelect,
-  onClose,
-  showCopyCut = true,
   onCopy,
   onCut,
+  onSelectEmotion,
+  onFocus,
 }: {
   position: { x: number; y: number };
-  onSelect: (emotionId: string) => void;
-  onClose: () => void;
-  showCopyCut?: boolean;
-  onCopy?: () => void;
-  onCut?: () => void;
+  onCopy: () => void;
+  onCut: () => void;
+  onSelectEmotion: (emotionId: string) => void;
+  onFocus: () => void;
 }) {
+  const [isEmotionOpen, setIsEmotionOpen] = React.useState(false);
+
   return (
     <div
       className="fixed z-50 flex items-center gap-1 px-2 py-1.5 bg-foreground text-background rounded-full shadow-xl animate-in fade-in zoom-in-95 duration-150"
@@ -131,43 +149,211 @@ function EmotionSelector({
         transform: "translateX(-50%)",
       }}
     >
-      {showCopyCut && onCopy && (
-        <>
-          <button onClick={onCopy} className="p-2 rounded-full hover:bg-background/20 transition-colors" title="Copy">
-            <Copy className="w-4 h-4" />
-          </button>
-          <div className="w-px h-4 bg-background/30" />
-        </>
-      )}
-      {showCopyCut && onCut && (
-        <>
-          <button onClick={onCut} className="p-2 rounded-full hover:bg-background/20 transition-colors" title="Cut">
-            <Scissors className="w-4 h-4" />
-          </button>
-          <div className="w-px h-4 bg-background/30" />
-        </>
-      )}
-      {EMOTIONS.map((emotion) => (
+      {/* Copy */}
+      <button
+        onClick={onCopy}
+        className="p-2 rounded-full hover:bg-background/20 transition-colors"
+        title="Copy"
+      >
+        <Copy className="w-4 h-4" />
+      </button>
+
+      <div className="w-px h-4 bg-background/30" />
+
+      {/* Cut */}
+      <button
+        onClick={onCut}
+        className="p-2 rounded-full hover:bg-background/20 transition-colors"
+        title="Cut"
+      >
+        <Scissors className="w-4 h-4" />
+      </button>
+
+      <div className="w-px h-4 bg-background/30" />
+
+      {/* Emotion Dropdown */}
+      <div className="relative">
         <button
-          key={emotion.id}
-          onClick={() => onSelect(emotion.id)}
-          className="p-1.5 rounded-full hover:bg-background/20 transition-colors"
-          title={emotion.name}
-          style={{ color: emotion.color }}
+          onClick={() => setIsEmotionOpen(!isEmotionOpen)}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-background/20 transition-colors"
         >
-          <div
-            className="w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] font-bold"
-            style={{ borderColor: emotion.color, backgroundColor: emotion.bgColor }}
-          >
-            {emotion.name[0]}
-          </div>
+          <Smile className="w-4 h-4" />
+          <span className="text-xs font-medium">Emotion</span>
+          <ChevronDown className={`w-3 h-3 transition-transform ${isEmotionOpen ? "rotate-180" : ""}`} />
         </button>
-      ))}
+
+        {isEmotionOpen && (
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-foreground rounded-lg shadow-xl p-1 min-w-[140px] animate-in fade-in slide-in-from-bottom-2 duration-150">
+            {EMOTIONS.map((emotion) => (
+              <button
+                key={emotion.id}
+                onClick={() => {
+                  onSelectEmotion(emotion.id);
+                  setIsEmotionOpen(false);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-background/20 transition-colors text-left"
+              >
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: emotion.color }} />
+                <span className="text-sm">{emotion.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="w-px h-4 bg-background/30" />
+
+      {/* Focus */}
+      <button
+        onClick={onFocus}
+        className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-background/20 transition-colors"
+        title="Focus on this text"
+      >
+        <Focus className="w-4 h-4" />
+        <span className="text-xs font-medium">Focus</span>
+      </button>
     </div>
   );
 }
 
-function SfxItem({ sfx, onDragStart }: { sfx: (typeof SFX_ITEMS)[0]; onDragStart: (e: React.DragEvent, tag: string) => void }) {
+/**
+ * EmotionHoverPopup - Shows when hovering over emotion-tagged text
+ * Allows changing or removing the emotion
+ */
+function EmotionHoverPopup({
+  position,
+  currentEmotion,
+  onSelectEmotion,
+  onRemove,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  position: { x: number; y: number };
+  currentEmotion: string;
+  onSelectEmotion: (emotionId: string) => void;
+  onRemove: () => void;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+}) {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const current = getEmotion(currentEmotion);
+
+  return (
+    <div
+      className="fixed z-50 flex items-center gap-1 px-2 py-1.5 bg-foreground text-background rounded-full shadow-xl animate-in fade-in zoom-in-95 duration-150"
+      style={{
+        left: position.x,
+        top: position.y - 50,
+        transform: "translateX(-50%)",
+      }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      {/* Current emotion & dropdown */}
+      <div className="relative">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-background/20 transition-colors"
+        >
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: current?.color }} />
+          <span className="text-xs font-medium">{current?.name}</span>
+          <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        </button>
+
+        {isOpen && (
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-foreground rounded-lg shadow-xl p-1 min-w-[140px] animate-in fade-in slide-in-from-bottom-2 duration-150">
+            {EMOTIONS.map((emotion) => (
+              <button
+                key={emotion.id}
+                onClick={() => {
+                  onSelectEmotion(emotion.id);
+                  setIsOpen(false);
+                }}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-background/20 transition-colors text-left ${
+                  emotion.id === currentEmotion ? "bg-background/10" : ""
+                }`}
+              >
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: emotion.color }} />
+                <span className="text-sm">{emotion.name}</span>
+                {emotion.id === currentEmotion && (
+                  <span className="ml-auto text-xs opacity-60">Current</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="w-px h-4 bg-background/30" />
+
+      {/* Remove emotion */}
+      <button
+        onClick={onRemove}
+        className="p-2 rounded-full hover:bg-background/20 transition-colors text-red-400"
+        title="Remove emotion"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * FocusOverlay - Dark overlay with spotlight on focused text
+ * Click anywhere or press ESC to close
+ */
+function FocusOverlay({
+  focusRect,
+  onClose,
+}: {
+  focusRect: { top: number; left: number; width: number; height: number };
+  onClose: () => void;
+}) {
+  // Close on Escape key
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-40 cursor-pointer" onClick={onClose}>
+      {/* Spotlight effect using box-shadow */}
+      <div
+        className="absolute rounded-lg pointer-events-none"
+        style={{
+          top: focusRect.top - 8,
+          left: focusRect.left - 8,
+          width: focusRect.width + 16,
+          height: focusRect.height + 16,
+          boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.75)",
+          border: "2px solid rgba(255, 255, 255, 0.3)",
+        }}
+      />
+
+      {/* Close hint */}
+      <div className="absolute top-4 right-4 text-white/70 text-sm flex items-center gap-2">
+        <span>Click anywhere or press</span>
+        <kbd className="px-2 py-1 bg-white/10 rounded text-xs">ESC</kbd>
+        <span>to exit</span>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// SFX ITEM COMPONENT
+// ============================================
+
+function SfxItem({
+  sfx,
+  onDragStart,
+}: {
+  sfx: (typeof SFX_ITEMS)[0];
+  onDragStart: (e: React.DragEvent, tag: string) => void;
+}) {
   const getIcon = () => {
     if (sfx.type === "silence") return <Clock className="w-3.5 h-3.5" />;
     if (sfx.type === "effect") return <Volume2 className="w-3.5 h-3.5" />;
@@ -176,15 +362,24 @@ function SfxItem({ sfx, onDragStart }: { sfx: (typeof SFX_ITEMS)[0]; onDragStart
 
   const getStyles = () => {
     switch (sfx.type) {
-      case "effect": return "bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30";
-      case "silence": return "bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-500/30";
-      default: return "bg-muted hover:bg-muted/80";
+      case "effect":
+        return "bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30";
+      case "silence":
+        return "bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-500/30";
+      default:
+        return "bg-muted hover:bg-muted/80";
     }
   };
 
   return (
-    <div draggable onDragStart={(e) => onDragStart(e, sfx.tag)} className="cursor-grab active:cursor-grabbing select-none group">
-      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] hover:shadow-md ${getStyles()}`}>
+    <div
+      draggable
+      onDragStart={(e) => onDragStart(e, sfx.tag)}
+      className="cursor-grab active:cursor-grabbing select-none group"
+    >
+      <div
+        className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] hover:shadow-md ${getStyles()}`}
+      >
         <GripVertical className="w-3 h-3 opacity-40 group-hover:opacity-70" />
         {getIcon()}
         <span className="font-medium text-sm">{sfx.name}</span>
@@ -193,6 +388,10 @@ function SfxItem({ sfx, onDragStart }: { sfx: (typeof SFX_ITEMS)[0]; onDragStart
     </div>
   );
 }
+
+// ============================================
+// HIGHLIGHTED CONTENT COMPONENT
+// ============================================
 
 function HighlightedContent({
   content,
@@ -245,10 +444,40 @@ function HighlightedContent({
 export function SfxScriptEditor() {
   const [script, setScript] = React.useState(EXAMPLE_SCRIPT);
   const [isDragOver, setIsDragOver] = React.useState(false);
-  const [selectionPopup, setSelectionPopup] = React.useState<{ position: { x: number; y: number }; text: string; range: Range | null } | null>(null);
-  const [hoverPopup, setHoverPopup] = React.useState<{ position: { x: number; y: number }; emotionId: string; text: string } | null>(null);
+
+  // Selection popup state
+  const [selectionPopup, setSelectionPopup] = React.useState<{
+    position: { x: number; y: number };
+    text: string;
+    range: Range | null;
+    rect: DOMRect | null;
+  } | null>(null);
+
+  // Hover popup state
+  const [hoverPopup, setHoverPopup] = React.useState<{
+    position: { x: number; y: number };
+    emotionId: string;
+    text: string;
+  } | null>(null);
+
+  // Focus mode state
+  const [focusRect, setFocusRect] = React.useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  const [isHoveringPopup, setIsHoveringPopup] = React.useState(false);
   const editorRef = React.useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const clearHoverTimeout = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+  };
 
   const updateEditorContent = React.useCallback(() => {
     if (!editorRef.current) return;
@@ -290,7 +519,9 @@ export function SfxScriptEditor() {
     }, 0);
   }, []);
 
-  React.useEffect(() => { updateEditorContent(); }, []);
+  React.useEffect(() => {
+    updateEditorContent();
+  }, []);
 
   const getEditorText = () => {
     if (!editorRef.current) return "";
@@ -317,6 +548,8 @@ export function SfxScriptEditor() {
   const handleInput = () => setScript(getEditorText());
 
   const handleMouseUp = () => {
+    if (focusRect) return; // Don't show popup in focus mode
+
     setTimeout(() => {
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed || !selection.toString().trim()) {
@@ -325,25 +558,53 @@ export function SfxScriptEditor() {
       }
       const anchorNode = selection.anchorNode;
       const focusNode = selection.focusNode;
-      if (anchorNode?.parentElement?.closest("[data-emotion]") || focusNode?.parentElement?.closest("[data-emotion]")) return;
+      if (
+        anchorNode?.parentElement?.closest("[data-emotion]") ||
+        focusNode?.parentElement?.closest("[data-emotion]")
+      ) {
+        return;
+      }
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       setSelectionPopup({
         position: { x: rect.left + rect.width / 2, y: rect.top + window.scrollY },
         text: selection.toString(),
         range: range.cloneRange(),
+        rect: rect,
       });
     }, 10);
   };
 
   const handleEmotionHover = (e: React.MouseEvent, emotionId: string, text: string) => {
-    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    if (focusRect) return; // Don't show popup in focus mode
+
+    clearHoverTimeout();
     const rect = (e.target as HTMLElement).getBoundingClientRect();
-    setHoverPopup({ position: { x: rect.left + rect.width / 2, y: rect.top + window.scrollY }, emotionId, text });
+    setHoverPopup({
+      position: { x: rect.left + rect.width / 2, y: rect.top + window.scrollY },
+      emotionId,
+      text,
+    });
   };
 
   const handleEmotionLeave = () => {
-    hoverTimeoutRef.current = setTimeout(() => setHoverPopup(null), 200);
+    hoverTimeoutRef.current = setTimeout(() => {
+      if (!isHoveringPopup) {
+        setHoverPopup(null);
+      }
+    }, 150);
+  };
+
+  const handlePopupMouseEnter = () => {
+    clearHoverTimeout();
+    setIsHoveringPopup(true);
+  };
+
+  const handlePopupMouseLeave = () => {
+    setIsHoveringPopup(false);
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoverPopup(null);
+    }, 150);
   };
 
   const wrapWithEmotion = (emotionId: string) => {
@@ -373,7 +634,35 @@ export function SfxScriptEditor() {
     const newTag = `<${newEmotionId}>${hoverPopup.text}</${newEmotionId}>`;
     setScript(script.replace(oldTag, newTag));
     setHoverPopup(null);
+    setIsHoveringPopup(false);
     setTimeout(updateEditorContent, 0);
+  };
+
+  const removeEmotion = () => {
+    if (!hoverPopup) return;
+    const oldTag = `<${hoverPopup.emotionId}>${hoverPopup.text}</${hoverPopup.emotionId}>`;
+    setScript(script.replace(oldTag, hoverPopup.text));
+    setHoverPopup(null);
+    setIsHoveringPopup(false);
+    setTimeout(updateEditorContent, 0);
+  };
+
+  // Focus mode handlers
+  const handleFocus = () => {
+    if (!selectionPopup?.rect) return;
+    const rect = selectionPopup.rect;
+    setFocusRect({
+      top: rect.top + window.scrollY,
+      left: rect.left + window.scrollX,
+      width: rect.width,
+      height: rect.height,
+    });
+    setSelectionPopup(null);
+    window.getSelection()?.removeAllRanges();
+  };
+
+  const handleCloseFocus = () => {
+    setFocusRect(null);
   };
 
   const handleCopy = () => {
@@ -429,7 +718,9 @@ export function SfxScriptEditor() {
   };
 
   React.useEffect(() => {
-    const prevent = (e: DragEvent) => { if (e.target !== editorRef.current) e.preventDefault(); };
+    const prevent = (e: DragEvent) => {
+      if (e.target !== editorRef.current) e.preventDefault();
+    };
     window.addEventListener("dragover", prevent);
     window.addEventListener("drop", prevent);
     return () => {
@@ -440,8 +731,31 @@ export function SfxScriptEditor() {
 
   return (
     <div className="w-full max-w-5xl mx-auto p-4 sm:p-6 space-y-4">
-      {selectionPopup && <EmotionSelector position={selectionPopup.position} onSelect={wrapWithEmotion} onClose={() => setSelectionPopup(null)} showCopyCut onCopy={handleCopy} onCut={handleCut} />}
-      {hoverPopup && <EmotionSelector position={hoverPopup.position} onSelect={changeEmotion} onClose={() => setHoverPopup(null)} showCopyCut={false} />}
+      {/* Focus Overlay */}
+      {focusRect && <FocusOverlay focusRect={focusRect} onClose={handleCloseFocus} />}
+
+      {/* Selection Popup */}
+      {selectionPopup && (
+        <SelectionPopup
+          position={selectionPopup.position}
+          onCopy={handleCopy}
+          onCut={handleCut}
+          onSelectEmotion={wrapWithEmotion}
+          onFocus={handleFocus}
+        />
+      )}
+
+      {/* Hover Popup */}
+      {hoverPopup && (
+        <EmotionHoverPopup
+          position={hoverPopup.position}
+          currentEmotion={hoverPopup.emotionId}
+          onSelectEmotion={changeEmotion}
+          onRemove={removeEmotion}
+          onMouseEnter={handlePopupMouseEnter}
+          onMouseLeave={handlePopupMouseLeave}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
         <Card className="overflow-hidden">
@@ -449,8 +763,14 @@ export function SfxScriptEditor() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">Script Editor</CardTitle>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="font-mono text-xs">{script.length} chars</Badge>
-                <button onClick={() => navigator.clipboard.writeText(script)} className="p-1.5 rounded-md hover:bg-muted transition-colors" title="Copy all">
+                <Badge variant="outline" className="font-mono text-xs">
+                  {script.length} chars
+                </Badge>
+                <button
+                  onClick={() => navigator.clipboard.writeText(script)}
+                  className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                  title="Copy all"
+                >
                   <Copy className="w-4 h-4 text-muted-foreground" />
                 </button>
               </div>
@@ -466,9 +786,15 @@ export function SfxScriptEditor() {
               onDragOver={handleDragOver}
               onDragLeave={() => setIsDragOver(false)}
               onDrop={handleDrop}
-              className={`w-full min-h-[500px] p-4 font-mono text-sm leading-relaxed whitespace-pre-wrap bg-background text-foreground focus:outline-none transition-colors duration-200 ${isDragOver ? "bg-primary/5" : ""}`}
+              className={`w-full min-h-[500px] p-4 font-mono text-sm leading-relaxed whitespace-pre-wrap bg-background text-foreground focus:outline-none transition-colors duration-200 ${
+                isDragOver ? "bg-primary/5" : ""
+              }`}
             >
-              <HighlightedContent content={script} onEmotionHover={handleEmotionHover} onEmotionLeave={handleEmotionLeave} />
+              <HighlightedContent
+                content={script}
+                onEmotionHover={handleEmotionHover}
+                onEmotionLeave={handleEmotionLeave}
+              />
             </div>
           </CardContent>
         </Card>
@@ -476,12 +802,19 @@ export function SfxScriptEditor() {
         <div className="space-y-4">
           <Card>
             <CardHeader className="py-3 border-b bg-muted/30">
-              <CardTitle className="text-sm flex items-center gap-2"><Smile className="w-4 h-4" />Emotions</CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Smile className="w-4 h-4" />
+                Emotions
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-3">
               <div className="grid grid-cols-2 gap-2">
                 {EMOTIONS.map((emotion) => (
-                  <div key={emotion.id} className="flex items-center gap-2 px-2 py-1.5 rounded text-xs" style={{ backgroundColor: emotion.bgColor, color: emotion.color }}>
+                  <div
+                    key={emotion.id}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded text-xs"
+                    style={{ backgroundColor: emotion.bgColor, color: emotion.color }}
+                  >
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: emotion.color }} />
                     {emotion.name}
                   </div>
@@ -493,19 +826,29 @@ export function SfxScriptEditor() {
 
           <Card>
             <CardHeader className="py-3 border-b bg-muted/30">
-              <CardTitle className="text-sm flex items-center gap-2"><Volume2 className="w-4 h-4 text-blue-500" />Sound Effects</CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Volume2 className="w-4 h-4 text-blue-500" />
+                Sound Effects
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-3 space-y-2">
-              {SFX_ITEMS.filter((s) => s.type === "effect").map((sfx) => <SfxItem key={sfx.id} sfx={sfx} onDragStart={handleDragStart} />)}
+              {SFX_ITEMS.filter((s) => s.type === "effect").map((sfx) => (
+                <SfxItem key={sfx.id} sfx={sfx} onDragStart={handleDragStart} />
+              ))}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="py-3 border-b bg-muted/30">
-              <CardTitle className="text-sm flex items-center gap-2"><Clock className="w-4 h-4 text-orange-500" />Silence / Pause</CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Clock className="w-4 h-4 text-orange-500" />
+                Silence / Pause
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-3 space-y-2">
-              {SFX_ITEMS.filter((s) => s.type === "silence").map((sfx) => <SfxItem key={sfx.id} sfx={sfx} onDragStart={handleDragStart} />)}
+              {SFX_ITEMS.filter((s) => s.type === "silence").map((sfx) => (
+                <SfxItem key={sfx.id} sfx={sfx} onDragStart={handleDragStart} />
+              ))}
             </CardContent>
           </Card>
 
@@ -514,6 +857,7 @@ export function SfxScriptEditor() {
             <p>• Drag SFX into the script</p>
             <p>• Select text → pick emotion</p>
             <p>• Hover emotion text to change</p>
+            <p>• Select text → Focus to highlight</p>
           </div>
         </div>
       </div>
@@ -523,7 +867,9 @@ export function SfxScriptEditor() {
           <CardTitle className="text-base">Raw Output</CardTitle>
         </CardHeader>
         <CardContent className="p-4 max-h-[200px] overflow-auto">
-          <pre className="whitespace-pre-wrap font-mono text-xs break-words text-muted-foreground">{script}</pre>
+          <pre className="whitespace-pre-wrap font-mono text-xs break-words text-muted-foreground">
+            {script}
+          </pre>
         </CardContent>
       </Card>
     </div>
